@@ -1,4 +1,4 @@
-package com.evolutionnext.akka.streams
+package com.xyzcorp.akka.streams
 
 import akka.NotUsed
 import akka.actor.ActorSystem

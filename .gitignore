@@ -76,3 +76,4 @@ dist/*
 project/plugins/project/
 .scala_dependencies
 .worksheet
+.cache-tests

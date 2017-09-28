@@ -1,15 +1,17 @@
-package com.evolutionnext.akka.streams
+package com.xyzcorp.akka.streams
 
+import akka.{Done, NotUsed}
 import akka.actor.ActorSystem
+import akka.stream.javadsl.MergePreferred
 import akka.stream.{ActorMaterializer, ThrottleMode}
-import akka.stream.scaladsl.Source
+import akka.stream.scaladsl.{Flow, Interleave, Keep, Merge, MergePrioritized, Source}
 import org.scalatest.{FunSuite, Matchers}
 
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.language.postfixOps
 import scala.util.Random
 
-class CombinatorStreamSpec extends FunSuite with Matchers {
+class SourceCombinatorStreamSpec extends FunSuite with Matchers {
   implicit val system: ActorSystem = ActorSystem("MyActorSystem")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
@@ -105,4 +107,65 @@ class CombinatorStreamSpec extends FunSuite with Matchers {
       .runForeach(println)
     Thread.sleep(1000)
   }
+
+  test("combine combines two sources so that they are interweaved, in this case we use merge to combine") {
+    val oneToOneHundred = Source(1 to 100)
+    val twoHundredToThreeHundred = Source(200 to 300)
+    Source.combine(oneToOneHundred, twoHundredToThreeHundred)(i => Merge(i)).runForeach(println)
+  }
+
+  test("combine combines two sources so that they are interweaved, in this case " +
+    "we use interleave that can choose, a number for the segment size") {
+    val oneToOneHundred = Source(1 to 100)
+    val twoHundredToThreeHundred = Source(200 to 300)
+    Source.combine(oneToOneHundred, twoHundredToThreeHundred)(i => Interleave(i, 2)).runForeach(println)
+  }
+
+  test("combine combines two sources so that they are interweaved, in this case " +
+    "we use merge prioritized to set a priority as to which one should be listened to first depending on weight") {
+    val oneToOneHundred = Source(1 to 100)
+    val twoHundredToThreeHundred = Source(200 to 300)
+    Source.combine(oneToOneHundred, twoHundredToThreeHundred)(i => MergePrioritized(Seq(2, 1))).runForeach(println)
+  }
+
+  test("zip will create a stream of tuples from each of the sources") {
+    Source(1 to 100).zip(Source('a' to 'z')).runForeach(println)
+  }
+
+  test("zip will create a stream of tuples from each of the sources, and will wait until another element is available") {
+    Source(1 to 100)
+      .zip(Source('a' to 'z')
+        .throttle(1, 5 millisecond, 3, ThrottleMode.shaping))
+      .runForeach(println)
+  }
+
+  test("zip with will create whatever with whatever function you would like from each of the sources, and will " +
+    "wait until another element is available") {
+    Source(1 to 100)
+      .zipWith(Source('a' to 'z'))((n, c) => "Item:" + c + n)
+      .runForeach(println)
+  }
+
+  test("zip with will create whatever with whatever function you would like from each of the sources, and will " +
+    "wait until another element is available") {
+    val source: Source[(Int, Char), NotUsed] = Source(1 to 100)
+      .zipMat(Source('a' to 'z'))(Keep.left)
+  }
+
+  test("difference between zip and zipWithMap") {
+
+    val firstZip: Source[(Int, Char), NotUsed] = Source(1 to 100)
+      .zip(Source('a' to 'z'))
+
+    val secondZip: Source[(Int, Char), (NotUsed, NotUsed)] = Source(1 to 100)
+      .zipMat(Source('a' to 'z'))(Keep.both)
+
+    val thirdZip = Source(1 to 100)
+      .zipWith(Source('a' to 'z'))((n, c) => "Item: %d %c".format(n, c))
+
+    val fourthZip = Source(1 to 100)
+      .zipWithMat(Source('a' to 'z'))((n, c) => "Item: %d %c".format(n, c))(Keep.both)
+  }
+
+
 }
