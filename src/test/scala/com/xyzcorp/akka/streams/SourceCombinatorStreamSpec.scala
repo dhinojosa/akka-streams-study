@@ -36,7 +36,7 @@ class SourceCombinatorStreamSpec extends FunSuite with Matchers {
     Source(1 to 10).filterNot(_ % 2 != 0).runForeach(println)
   }
 
-  test("Test with a delay") {
+  test("Delay will delay the stream by the number of seconds") {
     Source(1 to 10).delay(10 seconds).runForeach(println)
     Thread.sleep(12000)
   }
@@ -153,7 +153,6 @@ class SourceCombinatorStreamSpec extends FunSuite with Matchers {
   }
 
   test("difference between zip and zipWithMap") {
-
     val firstZip: Source[(Int, Char), NotUsed] = Source(1 to 100)
       .zip(Source('a' to 'z'))
 

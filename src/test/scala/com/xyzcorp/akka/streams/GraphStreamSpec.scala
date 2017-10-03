@@ -18,7 +18,9 @@ class GraphStreamSpec extends FunSuite with Matchers {
   implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
 
-  test("""DSL graphs show the flow of data and can be run within a Builder""".stripMargin) {
+  val userHome: String = System.getProperty("user.home")
+
+  test("""Case 1: DSL graphs show the flow of data and can be run within a Builder""".stripMargin) {
 
     val source = Source(1 to 100)
     val sink = Sink.foreach[Int](println)
@@ -27,7 +29,7 @@ class GraphStreamSpec extends FunSuite with Matchers {
       * GraphDSL is mutable: Once the GraphDSL has been constructed though, the GraphDSL
       * instance is immutable, thread-safe, and freely shareable
       */
-    var runnableGraph: RunnableGraph[NotUsed] = RunnableGraph.fromGraph(GraphDSL.create() {
+    val runnableGraph: RunnableGraph[NotUsed] = RunnableGraph.fromGraph(GraphDSL.create() {
 
       //The Builder inside though is mutable, once constructed that no longer becomes an issue
       implicit builder =>
@@ -46,7 +48,7 @@ class GraphStreamSpec extends FunSuite with Matchers {
 
 
   test(
-    """DSL graphs show the flow of data and can be run within a Builder and use injection into the graph""".stripMargin) {
+    """Case 2: DSL graphs show the flow of data and can be run within a Builder and use injection into the graph""".stripMargin) {
 
     val source = Source(1 to 100)
     val sink = Sink.foreach[Int](println)
@@ -72,7 +74,7 @@ class GraphStreamSpec extends FunSuite with Matchers {
     runnableGraph.run()
   }
 
-  test("""DSL graphs show the flow of data Broadcast and Merge using the Scala DSL""".stripMargin) {
+  test("""Case 3: DSL graphs show the flow of data Broadcast and Merge using the Scala DSL""".stripMargin) {
     val source = Source(1 to 100)
     val sink = Sink.foreach[String](println)
 
@@ -90,7 +92,7 @@ class GraphStreamSpec extends FunSuite with Matchers {
       val flow_3 = Flow[Int].map(x => "Flow 3: " + x * 3)
 
       source ~> broadcast ~> flow_2 ~> merge ~> sink
-      broadcast ~> flow_3 ~> merge
+                broadcast ~> flow_3 ~> merge
       ClosedShape
     })
 
@@ -102,15 +104,15 @@ class GraphStreamSpec extends FunSuite with Matchers {
   /**
     * This shows we can create a graph. Making a Graph a RunnableGraph requires all ports to be connected
     */
-  test("DSL graphs show the flow of data as a sink with one input, explicitly with determining the splitter ports") {
+  test("Case 4: DSL graphs show the flow of data as a sink with one input, explicitly with determining the splitter ports") {
 
     val source = Source(1 to 100)
 
     val outputToTwoFiles: Graph[SinkShape[Int], NotUsed] = GraphDSL.create() { implicit b =>
       import GraphDSL.Implicits._
 
-      val fileSink1 = b.add(FileIO.toPath(Paths.get("/Users/danno/complete1.txt")))
-      val fileSink2 = b.add(FileIO.toPath(Paths.get("/Users/danno/complete2.txt")))
+      val fileSink1 = b.add(FileIO.toPath(Paths.get(s"$userHome/complete1.txt")))
+      val fileSink2 = b.add(FileIO.toPath(Paths.get(s"$userHome/complete2.txt")))
       //This is highly important, every component can only be used once!
       val int2ByteString1, int2ByteString2 = b.add(Flow[Int].map(x => ByteString(x)))
       val splitter = b.add(Broadcast[Int](2))
@@ -126,14 +128,14 @@ class GraphStreamSpec extends FunSuite with Matchers {
   }
 
 
-  test("DSL graphs show the flow of data as a sink with one input, with an implicit graph") {
+  test("Case 5: DSL graphs show the flow of data as a sink with one input, with an implicit graph") {
     val source = Source(1 to 100)
 
     val outputToTwoFiles: Graph[SinkShape[Int], NotUsed] = GraphDSL.create() { implicit b =>
       import GraphDSL.Implicits._
 
-      val fileSink1 = b.add(FileIO.toPath(Paths.get("/Users/danno/complete1.txt")))
-      val fileSink2 = b.add(FileIO.toPath(Paths.get("/Users/danno/complete2.txt")))
+      val fileSink1 = b.add(FileIO.toPath(Paths.get(s"$userHome/complete1.txt")))
+      val fileSink2 = b.add(FileIO.toPath(Paths.get(s"$userHome/complete2.txt")))
       val int2ByteString1, int2ByteString2 = b.add(Flow[Int].map(x => ByteString(x)))
       val splitter = b.add(Broadcast[Int](2))
 
@@ -145,9 +147,5 @@ class GraphStreamSpec extends FunSuite with Matchers {
 
     source.runWith(outputToTwoFiles)
     Thread.sleep(5000)
-  }
-
-  test("Show a feedback loop") {
-
   }
 }

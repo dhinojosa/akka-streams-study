@@ -69,16 +69,4 @@ class DynamicStreamSpec extends FunSuite with Matchers {
 
     Thread.sleep(30000)
   }
-
-  test("Case 3: Partition Hub with a stateful sink") {
-    pending
-  }
-
-  test("Case 4: Partition Hub with a stateful sink") {
-    pending
-//    PartitionHub.statefulSink[Int](partitioner = () => (ci: PartitionHub.ConsumerInfo, Int) => {
-//      ci.consumerIdByIdx()
-//      199L
-//    }, 2, 156)
-  }
 }

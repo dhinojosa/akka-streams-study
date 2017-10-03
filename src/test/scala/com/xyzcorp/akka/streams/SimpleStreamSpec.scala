@@ -6,23 +6,29 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 
 import akka.actor.{ActorSystem, Cancellable}
+import akka.event.Logging
 import akka.stream._
-import akka.stream.scaladsl.{Broadcast, FileIO, Flow, Keep, Sink, Source}
+import akka.stream.scaladsl.{Broadcast, FileIO, Flow, Keep, RunnableGraph, Sink, Source, SourceQueueWithComplete}
 import akka.util.ByteString
 import akka.{Done, NotUsed}
 import org.reactivestreams.{Publisher, Subscriber, Subscription}
 import org.scalatest.{FunSuite, Matchers}
 
+import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.{Await, ExecutionContextExecutor, Future}
+import scala.concurrent.{Await, ExecutionContextExecutor, Future, Promise}
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
+import scala.concurrent.duration._
 
 class SimpleStreamSpec extends FunSuite with Matchers {
 
   implicit val system: ActorSystem = ActorSystem("MyActorSystem")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
+
+
+  val userHome: String = System.getProperty("user.home")
 
   test(
     """A Source that accepts a single item, the first element [Int] is the type of element that
@@ -46,6 +52,27 @@ class SimpleStreamSpec extends FunSuite with Matchers {
       | by using apply which takes an Iterable""".stripMargin) {
     val range: Source[Int, NotUsed] = Source(1 to 100)
     range.runForeach(println)
+  }
+
+  test("""A stream can be created by independent components""") {
+    val mapIntFlow: Flow[Int, Int, NotUsed] = Flow[Int].map(x => 10 + x)
+    val printlnSink = Sink.foreach[Int](println)
+    val graph: RunnableGraph[NotUsed] = Source(1 to 10).via(mapIntFlow).to(printlnSink)
+    graph.run()(materializer)
+    Thread.sleep(1000)
+  }
+
+  test("""A Source can be composited to create another source by integrating a Flow""") {
+    val mapIntFlow: Flow[Int, Int, NotUsed] = Flow[Int].map(x => 10 + x)
+    val printlnSink = Sink.foreach[Int](println)
+    val compositeSource = Source(1 to 10).via(mapIntFlow)
+    val future = compositeSource.runForeach(println)
+    Thread.sleep(1000)
+  }
+
+  test("""A stream can be composited with Sink""") {
+    val mapIntFlow: Flow[Int, Int, NotUsed] = Flow[Int].map(x => 10 + x)
+    val compositeSink: Sink[Int, NotUsed] = mapIntFlow.to(Sink.foreach(println))
   }
 
   test(
@@ -114,6 +141,15 @@ class SimpleStreamSpec extends FunSuite with Matchers {
     Thread.sleep(5000)
   }
 
+  test("A maybe source, returns a Promise[Option[Int]] which will receive a promise as its auxiliary value") {
+    val maybeSource: Source[Int, Promise[Option[Int]]] = Source.maybe[Int]
+    val result: RunnableGraph[Promise[Option[Int]]] = maybeSource.map(x => x+ 1).toMat(Sink.foreach(println))(Keep.left)
+    val promise = result.run()
+    Thread.sleep(1000)
+    promise.success(Some(100))
+    Thread.sleep(1000)
+  }
+
   test("A RunnableGraph is a graph will all the elements connected") {
     import scala.concurrent.duration._
 
@@ -166,7 +202,7 @@ class SimpleStreamSpec extends FunSuite with Matchers {
     val flow: Flow[Int, ByteString, NotUsed] =
       Flow[Int].map(x => ByteString(x + "\n"))
     val sink: Sink[ByteString, Future[IOResult]] =
-      FileIO.toPath(Paths.get("/Users/danno/awesome.txt"))
+      FileIO.toPath(Paths.get(s"$userHome/awesome.txt"))
     val matSink: ((NotUsed, Future[IOResult]) => Nothing) => Sink[Int, Nothing] =
       flow.toMat(sink)
     val matSinkKeepRight: Sink[Int, Future[IOResult]] = flow.toMat(sink)(Keep.right)
@@ -178,20 +214,24 @@ class SimpleStreamSpec extends FunSuite with Matchers {
     val flow: Flow[Int, ByteString, NotUsed] =
       Flow[Int].map(x => ByteString(x + "\n"))
     Source.single(4).runWith(
-      flow.toMat(FileIO.toPath(Paths.get("/Users/danno/awesome.txt")))(Keep.right))
+      flow.toMat(FileIO.toPath(Paths.get(s"$userHome/awesome.txt")))(Keep.right))
+
+
+    val intOddFilter: Flow[Int, Int, NotUsed] = Flow[Int].filter(x => x % 2 == 0)
+
   }
 
   test("""Sink Direct to the output""") {
     val fact: Source[BigInt, NotUsed] =
       Source(1 to 100).scan(BigInt(1))((acc, next) => acc * next)
     fact.map(x => ByteString(s"num: $x\n"))
-      .runWith(FileIO.toPath(Paths.get("/Users/danno/factorials.txt")))
+      .runWith(FileIO.toPath(Paths.get(s"$userHome/factorials.txt")))
   }
 
   test("""Tick of data every second, taking the first 100 and outputting it""") {
     val source: Source[LocalDateTime, Cancellable] = Source.tick(FiniteDuration(0, TimeUnit.SECONDS),
       FiniteDuration(10, TimeUnit.MILLISECONDS), LocalDateTime.now).take(100)
-    val fileSink: Sink[ByteString, Future[IOResult]] = FileIO.toPath(Paths.get("/home/danno/time-output-akka-stream.txt"))
+    val fileSink: Sink[ByteString, Future[IOResult]] = FileIO.toPath(Paths.get(s"$userHome/time-output-akka-stream.txt"))
     val result = source.map(ldt => ByteString(ldt.getMinute.toString)).toMat(fileSink)(Keep.right)
     result.run().onComplete { t =>
       val str = t match {
@@ -205,7 +245,6 @@ class SimpleStreamSpec extends FunSuite with Matchers {
   }
 
   test("Perform a test with an async boundary which will run on a separate actor and dispatcher") {
-
     import scala.language.postfixOps
     Source(1 to 10)
       .map(1 +)
@@ -223,11 +262,22 @@ class SimpleStreamSpec extends FunSuite with Matchers {
   }
 
 
-  test("Perform a test with a recover, the recover will take a Partial Function") {
+  test("Perform a stream with a recover, the recover will take a Partial Function, and continue with another value") {
     Source(10 to 0 by -1)
       .async
       .map(x => Some(100 / x))
       .recover { case t: Throwable => None }
+      .runForeach(println)
+    Thread.sleep(5000)
+  }
+
+  test(
+    """Perform a stream with a recoverWithRetries which will run the test a specified
+      | number of times and will bail with another stream""".stripMargin) {
+    Source(10 to 0 by -1)
+      .async
+      .map(x => Some(100 / x))
+      .recoverWithRetries(3, {case t: Throwable => Source.apply(20 to 30)})
       .runForeach(println)
     Thread.sleep(5000)
   }
@@ -237,10 +287,11 @@ class SimpleStreamSpec extends FunSuite with Matchers {
       .map(x => s"$x\n")
       .map(s => ByteString(s)).async
 
+
     val broadcast: Int => Broadcast[ByteString] = x => Broadcast[ByteString](x)
 
-    val file1: Sink[ByteString, Future[IOResult]] = FileIO.toPath(Paths.get("/Users/danno/path1.txt"))
-    val file2: Sink[ByteString, Future[IOResult]] = FileIO.toPath(Paths.get("/Users/danno/path2.txt"))
+    val file1: Sink[ByteString, Future[IOResult]] = FileIO.toPath(Paths.get(s"$userHome/path1.txt"))
+    val file2: Sink[ByteString, Future[IOResult]] = FileIO.toPath(Paths.get(s"$userHome/path2.txt"))
 
     val finalSink: Sink[ByteString, NotUsed] = Sink.combine(file1, file2)(broadcast)
 
@@ -250,10 +301,45 @@ class SimpleStreamSpec extends FunSuite with Matchers {
   }
 
   test("Creation with lazily") {
-    val zonedDateTimeNowSource: Source[ZonedDateTime, Future[NotUsed]] =
-          Source.lazily(() => Source.single(ZonedDateTime.now))
+    val zonedDateTimeNowSource: Source[ZonedDateTime, Future[NotUsed]] = Source.lazily(() => Source.single(ZonedDateTime.now))
     zonedDateTimeNowSource.runForeach(println)
     Thread.sleep(5000)
     zonedDateTimeNowSource.runForeach(println)
+  }
+
+  test("Manual Creation with a Queue") {
+
+    val source: Source[Int, SourceQueueWithComplete[Int]] = Source.queue[Int](10, OverflowStrategy.backpressure)
+    val graph: RunnableGraph[SourceQueueWithComplete[Int]] = source.toMat(Sink.foreach(println))(Keep.left)
+    val queue = graph.run()
+
+    queue.offer(10)
+    queue.offer(30)
+    queue.offer(40)
+    Thread.sleep(30)
+    queue.offer(50)
+    queue.offer(60)
+    queue.offer(90)
+  }
+
+  test("Simple logging") {
+    Source(1 to 100).log("start")
+      .withAttributes(Attributes.logLevels(onElement = Logging.WarningLevel))
+      .runForeach(println)
+  }
+
+  test("Attributes and Logging") {
+    val maybeSource: Source[Int, Promise[Option[Int]]] = Source.maybe[Int]
+    val runnableGraph: RunnableGraph[Promise[Option[Int]]] = maybeSource
+      .log("to begin")
+      .withAttributes(Attributes.logLevels(onElement = Logging.WarningLevel))
+      .map(x => x + 10)
+      .log("after adding ten")
+      .toMat(Sink.foreach(println))(Keep.left)
+
+    val promisedMaybeInt = runnableGraph.run()
+    Thread.sleep(100)
+    promisedMaybeInt.success(Some(100))
+    Thread.sleep(100)
   }
 }
