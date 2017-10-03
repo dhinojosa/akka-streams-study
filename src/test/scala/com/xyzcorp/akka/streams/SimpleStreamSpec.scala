@@ -55,11 +55,7 @@ class SimpleStreamSpec extends FunSuite with Matchers {
   }
 
   test("""A stream can be created by independent components""") {
-    val mapIntFlow: Flow[Int, Int, NotUsed] = Flow[Int].map(x => 10 + x)
-    val printlnSink = Sink.foreach[Int](println)
-    val graph: RunnableGraph[NotUsed] = Source(1 to 10).via(mapIntFlow).to(printlnSink)
-    graph.run()(materializer)
-    Thread.sleep(1000)
+    pending
   }
 
   test("""A Source can be composited to create another source by integrating a Flow""") {
