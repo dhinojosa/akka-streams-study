@@ -1,15 +1,13 @@
 package com.xyzcorp.akka.streams
 
-import akka.{Done, NotUsed}
+import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.javadsl.MergePreferred
-import akka.stream.{ActorMaterializer, ThrottleMode}
-import akka.stream.scaladsl.{Flow, Interleave, Keep, Merge, MergePrioritized, Source}
+import akka.stream.scaladsl.{Interleave, Keep, Merge, MergePrioritized, Source}
+import akka.stream.{ActorMaterializer, DelayOverflowStrategy, ThrottleMode}
 import org.scalatest.{FunSuite, Matchers}
 
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.ExecutionContextExecutor
 import scala.language.postfixOps
-import scala.util.Random
 
 class SourceCombinatorStreamSpec extends FunSuite with Matchers {
   implicit val system: ActorSystem = ActorSystem("MyActorSystem")
@@ -18,52 +16,75 @@ class SourceCombinatorStreamSpec extends FunSuite with Matchers {
 
   import scala.concurrent.duration._
 
-  test("map of course maps each element") {
+  test(
+    """There's a little black spot on the sun today
+    that's my soul up there
+    It's the same old thing as yesterday""".stripMargin) {
+    List(1, 2, 3, 4).map(_ + 3) should be(List(4, 5, 6, 7))
+  }
+
+  test("Case 1: Applies a function to element in the stream") {
     Source(1 to 10).map(x => x + 64).map(x => x.toChar + " ").runForeach(println)
   }
 
-  test("flatMapConcat") {
+  test(
+    """Case 2: flatMapConcat transforms each element into a `Source` of output elements
+      then flattened into the output stream by concatenation,
+      fully consuming one Source after the other.""") {
     Source.single("This is a sentence")
       .flatMapConcat(w => Source(w.split("""\s""").toList))
       .runForeach(println)
   }
 
-  test("filter") {
+  test("Case 3: filter will only pass on those elements that satisfy the given predicate") {
     Source(1 to 10).filter(_ % 2 != 0).runForeach(println)
   }
 
-  test("filterNot") {
+  test("Case 4: filterNot will negate what filter does") {
     Source(1 to 10).filterNot(_ % 2 != 0).runForeach(println)
   }
 
-  test("Delay will delay the stream by the number of seconds") {
+  test("Case 5: Delay will delay the stream by the duration presented") {
     Source(1 to 10).delay(10 seconds).runForeach(println)
     Thread.sleep(12000)
   }
 
-  test("tick is an infinite source that continually emits items") {
+  test(
+    """Case 6: Delay will delay the stream by the duration presented, as well as receive
+       an DelayOverflowStrategy, which contains, backpressure, dropBuffer, dropHead,
+       dropNew, dropTail, emitEarly, and fail""") {
+    Source(1 to 10).delay(10 seconds, DelayOverflowStrategy.dropBuffer).runForeach(println)
+    Thread.sleep(12000)
+  }
+
+  test(
+    """Case 7: Stream is an iterable, therefore Stream.from(0) will start from the beginning, and continue
+       from there.""") {
     Source(Stream.from(0)).runForeach { i => Thread.sleep(5); println(i) }
   }
 
-  test("Throttle sends elements downstream with speed limited to elements/per. " +
-    "In other words, this stage set the maximum rate for emitting messages. " +
-    "ThrottleMode.Shaping make pauses before emitting messages to meet throttle rate") {
+  test(
+    """Case 8: Throttle sends elements downstream with speed limited to elements/per
+    In other words, this stage set the maximum rate for emitting messages.
+    ThrottleMode.Shaping make pauses before emitting messages to meet throttle rate""") {
     Source(Stream.from(0))
       .throttle(1, 1 second, 10, ThrottleMode.shaping)
       .runForeach(println)
     Thread.sleep(20000)
   }
 
-  test("Throttle sends elements downstream with speed limited to elements/per. " +
-    "In other words, this stage set the maximum rate for emitting messages. " +
-    "ThrottleMode.enforcing makes throttle fail with exception when upstream is faster than throttle rate") {
+  test(
+    """Case 9: Throttle sends elements downstream
+          with speed limited to elements / per
+          In other words, this stage set the maximum rate for emitting messages.
+          ThrottleMode.enforcing makes throttle fail with exception when upstream is faster than throttle rate""") {
     Source(Stream.from(0))
       .throttle(1, 1 second, 10, ThrottleMode.enforcing)
       .runForeach(println)
     Thread.sleep(20000)
   }
 
-  test("recover allows you to emit a final element and then complete the stream " +
+  test("Case 10: Recover allows you to emit a final element and then complete the stream " +
     "on an upstream failure. Deciding which exceptions should be recovered is done " +
     "through a PartialFunction. If an exception does not have a matching case the " +
     "stream is failed. This is useful if you wish to finish a stream gracefully from an error") {
@@ -78,11 +99,11 @@ class SourceCombinatorStreamSpec extends FunSuite with Matchers {
     Thread.sleep(20000)
   }
 
-  test("recover allows you to emit a final element and then complete the stream " +
+  test("Case 11: Recover allows you to emit a final element and then complete the stream " +
     "on an upstream failure. Deciding which exceptions should be recovered is done " +
     "through a PartialFunction. If an exception does not have a matching case the " +
     "stream is failed. This is useful if you wish to finish a stream gracefully from an error. " +
-    "In this case we will use an Either type") {
+    "In this case we will use an Either type.") {
     Source(Stream.from(0))
       .throttle(1, 1 second, 10, ThrottleMode.enforcing)
       .map[Either[Throwable, Int]](x => Right(x))
@@ -95,7 +116,7 @@ class SourceCombinatorStreamSpec extends FunSuite with Matchers {
     Thread.sleep(20000)
   }
 
-  test("recover with retries allows you to emit a final element and then complete the stream " +
+  test("Case 12: Recover with retries allows you to emit a final element and then complete the stream " +
     "on an upstream failure, but each time, it will retry, this is useful if you are making a " +
     "network connection and would need to give it a few attempts, backpressure is built in") {
     Source.cycle(() => 10 to 0 by -1 toIterator)
@@ -108,63 +129,52 @@ class SourceCombinatorStreamSpec extends FunSuite with Matchers {
     Thread.sleep(1000)
   }
 
-  test("combine combines two sources so that they are interweaved, in this case we use merge to combine") {
+  test("Case 13: combine combines two sources so that they are interweaved, in this case we use merge to combine") {
     val oneToOneHundred = Source(1 to 100)
     val twoHundredToThreeHundred = Source(200 to 300)
     Source.combine(oneToOneHundred, twoHundredToThreeHundred)(i => Merge(i)).runForeach(println)
   }
 
-  test("combine combines two sources so that they are interweaved, in this case " +
+  test("Case14: combine combines two sources so that they are interweaved, in this case " +
     "we use interleave that can choose, a number for the segment size") {
     val oneToOneHundred = Source(1 to 100)
     val twoHundredToThreeHundred = Source(200 to 300)
     Source.combine(oneToOneHundred, twoHundredToThreeHundred)(i => Interleave(i, 2)).runForeach(println)
   }
 
-  test("combine combines two sources so that they are interweaved, in this case " +
+  test("Case 15: combine combines two sources so that they are interweaved, in this case " +
     "we use merge prioritized to set a priority as to which one should be listened to first depending on weight") {
     val oneToOneHundred = Source(1 to 100)
     val twoHundredToThreeHundred = Source(200 to 300)
     Source.combine(oneToOneHundred, twoHundredToThreeHundred)(i => MergePrioritized(Seq(2, 1))).runForeach(println)
   }
 
-  test("zip will create a stream of tuples from each of the sources") {
+  test("Case 16: zip will create a stream of tuples from each of the sources") {
     Source(1 to 100).zip(Source('a' to 'z')).runForeach(println)
   }
 
-  test("zip will create a stream of tuples from each of the sources, and will wait until another element is available") {
-    Source(1 to 100)
+  test("""Case 17: zip will create a stream of tuples from each of the sources
+       and will wait until another element is available. Some notes:
+           1. 100 is vastly larger than a through z
+           2. Throttle will slow things down but not by much""") {
+    Source(1 to 100)                                          //100 is vastly larger than a..z
       .zip(Source('a' to 'z')
-        .throttle(1, 5 millisecond, 3, ThrottleMode.shaping))
+        .throttle(1, 1 second, 3, ThrottleMode.shaping)) //Causing a wait
       .runForeach(println)
+    Thread.sleep(10000)
   }
 
-  test("zip with will create whatever with whatever function you would like from each of the sources, and will " +
-    "wait until another element is available") {
+  test(
+    """Case 18: zipWith will create whatever with whatever function
+       you would like from each of the sources, and will wait until
+       another element is available""") {
     Source(1 to 100)
       .zipWith(Source('a' to 'z'))((n, c) => "Item:" + c + n)
       .runForeach(println)
   }
 
-  test("zip with will create whatever with whatever function you would like from each of the sources, and will " +
-    "wait until another element is available") {
+  test("Case 19: zipMat will allow you to choose which of the auxiliary information you would like to carry through") {
     val source: Source[(Int, Char), NotUsed] = Source(1 to 100)
       .zipMat(Source('a' to 'z'))(Keep.left)
   }
-
-  test("difference between zip and zipWithMap") {
-    val firstZip: Source[(Int, Char), NotUsed] = Source(1 to 100)
-      .zip(Source('a' to 'z'))
-
-    val secondZip: Source[(Int, Char), (NotUsed, NotUsed)] = Source(1 to 100)
-      .zipMat(Source('a' to 'z'))(Keep.both)
-
-    val thirdZip = Source(1 to 100)
-      .zipWith(Source('a' to 'z'))((n, c) => "Item: %d %c".format(n, c))
-
-    val fourthZip = Source(1 to 100)
-      .zipWithMat(Source('a' to 'z'))((n, c) => "Item: %d %c".format(n, c))(Keep.both)
-  }
-
-
 }
