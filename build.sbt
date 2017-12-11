@@ -2,7 +2,7 @@ name := "akka-streams-study"
 
 version := "1.0-SNAPSHOT"
 
-scalaVersion := "2.12.0"
+scalaVersion := "2.12.3"
 
 val akkaVersion = "2.5.8"
 

@@ -52,7 +52,7 @@ public class CompletableFutureTest {
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
-                    return "Durham, NC";
+                    return "Rochester, NY";
                 }, executorService);
     }
 
@@ -83,6 +83,7 @@ public class CompletableFutureTest {
         integerFuture1.thenApply(x -> String.valueOf(x + 19)).thenAccept(System.out::println);
         Thread.sleep(5000);
     }
+
     @Test
     public void completableFutureWithThenApplyAsync() throws InterruptedException {
         CompletableFuture<String> thenApplyAsync =
