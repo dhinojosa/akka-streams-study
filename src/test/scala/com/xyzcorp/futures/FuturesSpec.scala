@@ -22,15 +22,10 @@ class FuturesSpec extends FunSuite with Matchers {
   test("Case 2: A basic Future[T]. Processing it using onComplete and Try[T]") {
     import scala.concurrent.ExecutionContext.Implicits.global
 
-    val eventualString: Future[String] = Future {
-      val num = scala.util.Random.nextInt(2)
-      if (num == 1) "Awesome!" else throw new RuntimeException(s"Invalid number $num")
-    }
-    eventualString.onComplete { t =>
-      t match {
-        case Success(x) => println(s"Awesome! It's $x!")
-        case Failure(th) => println(s"Failed! Exception message is ${th.getMessage}")
-      }
-    }
+    //Create eventual String here
+
+    //Respond to the future using onComplete
+
+    pending
   }
 }

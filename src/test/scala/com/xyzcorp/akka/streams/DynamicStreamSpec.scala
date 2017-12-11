@@ -42,7 +42,6 @@ class DynamicStreamSpec extends FunSuite with Matchers {
     Thread.sleep(3000)
   }
 
-
   test("Case 2: BroadcastHub is a fan-out junction that allows any number of consumers (sinks). " +
     "The rate of the producer will automatically be timed to the speed of the slowest consumer " +
     "Consumers will attach after the sink has been materialized") {
