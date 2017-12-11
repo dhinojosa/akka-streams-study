@@ -5,7 +5,7 @@ import java.time.ZonedDateTime
 
 import akka.{Done, NotUsed}
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Merge, RunnableGraph, Sink, Source}
+import akka.stream.scaladsl.{Broadcast, FileIO, Flow, GraphDSL, Keep, Merge, RunnableGraph, Sink, Source}
 import akka.stream._
 import akka.util.ByteString
 import org.scalatest.{FunSuite, Matchers}
@@ -20,7 +20,9 @@ class GraphStreamSpec extends FunSuite with Matchers {
 
   val userHome: String = System.getProperty("user.home")
 
-  test("""Case 1: DSL graphs show the flow of data and can be run within a Builder""".stripMargin) {
+  test(
+    """Case 1: DSL graphs show the flow of data
+       and can be run within a Builder""") {
 
     val source = Source(1 to 100)
     val sink = Sink.foreach[Int](println)
@@ -47,8 +49,8 @@ class GraphStreamSpec extends FunSuite with Matchers {
   }
 
 
-  test(
-    """Case 2: DSL graphs show the flow of data and can be run within a Builder and use injection into the graph""".stripMargin) {
+  test("""Case 2: DSL graphs show the flow of data and can be
+    "run within a Builder and use injection into the graph""") {
 
     val source = Source(1 to 100)
     val sink = Sink.foreach[Int](println)
@@ -58,23 +60,25 @@ class GraphStreamSpec extends FunSuite with Matchers {
       * instance is immutable, thread-safe, and freely shareable, this call will inject the source and sink in the
       * GraphDSL
       */
-    val runnableGraph: RunnableGraph[(NotUsed, Future[Done])] = RunnableGraph.fromGraph(
-      GraphDSL.create(source, sink)((_, _)) { implicit builder =>
-        (src, snk) =>
+    val runnableGraph =
+      RunnableGraph.fromGraph(
+        GraphDSL.create(source, sink)(Keep.right) { implicit builder =>
+          (src, snk) =>
 
-          /**
-            * brings into scope the ~> operator (read as “edge”, “via” or “to”)
-            * and its inverted counterpart <~ (for noting down flows in the opposite direction where appropriate).
-            */
-          import GraphDSL.Implicits._
-          source ~> snk
-          ClosedShape
-      })
+            /**
+              * brings into scope the ~> operator (read as “edge”, “via” or “to”)
+              * and its inverted counterpart <~ (for noting down flows in the opposite direction where appropriate).
+              */
+            import GraphDSL.Implicits._
+            src ~> snk
+            ClosedShape
+        })
 
     runnableGraph.run()
   }
 
-  test("""Case 3: DSL graphs show the flow of data Broadcast and Merge using the Scala DSL""".stripMargin) {
+  test("""Case 3: DSL graphs show the flow of data
+       Broadcast and Merge using the Scala DSL""") {
     val source = Source(1 to 100)
     val sink = Sink.foreach[String](println)
 
@@ -92,7 +96,7 @@ class GraphStreamSpec extends FunSuite with Matchers {
       val flow_3 = Flow[Int].map(x => "Flow 3: " + x * 3)
 
       source ~> broadcast ~> flow_2 ~> merge ~> sink
-                broadcast ~> flow_3 ~> merge
+      broadcast ~> flow_3 ~> merge
       ClosedShape
     })
 
@@ -113,6 +117,7 @@ class GraphStreamSpec extends FunSuite with Matchers {
 
       val fileSink1 = b.add(FileIO.toPath(Paths.get(s"$userHome/complete1.txt")))
       val fileSink2 = b.add(FileIO.toPath(Paths.get(s"$userHome/complete2.txt")))
+
       //This is highly important, every component can only be used once!
       val int2ByteString1, int2ByteString2 = b.add(Flow[Int].map(x => ByteString(x)))
       val splitter = b.add(Broadcast[Int](2))
@@ -127,8 +132,10 @@ class GraphStreamSpec extends FunSuite with Matchers {
     Thread.sleep(5000)
   }
 
+  test(
+    """Case 5: DSL graphs show the flow of data as a
+       sink with one input, with an implicit graph""") {
 
-  test("Case 5: DSL graphs show the flow of data as a sink with one input, with an implicit graph") {
     val source = Source(1 to 100)
 
     val outputToTwoFiles: Graph[SinkShape[Int], NotUsed] = GraphDSL.create() { implicit b =>

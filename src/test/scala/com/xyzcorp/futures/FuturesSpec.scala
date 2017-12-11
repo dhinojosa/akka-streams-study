@@ -6,7 +6,7 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 class FuturesSpec extends FunSuite with Matchers {
-  test("A basic future. Processing it using foreach") {
+  test("Case 1: A basic future. Processing it using foreach") {
     val executionContext = ExecutionContext.global
 
     val future = Future.apply {
@@ -19,7 +19,14 @@ class FuturesSpec extends FunSuite with Matchers {
     Thread.sleep(4000)
   }
 
-  test("A basic future. Processing it using onComplete") {
+
+  test("Case 2: A basic Future[T]. Processing it using onComplete and Try[T]") {
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    //Create eventual String here
+
+    //Respond to the future using onComplete
+
     pending
   }
 }

@@ -1,13 +1,12 @@
-package com.xyzcorp.akka
+package com.xyzcorp.akka.actors
 
 import akka.actor.{ActorSystem, Props}
-import org.scalatest.FlatSpec
+import com.xyzcorp.akka.SimpleActorScala
+import org.scalatest.{FlatSpec, FunSuite}
 
-class SimpleActorSpec extends FlatSpec {
+class SimpleActorSpec extends FunSuite {
 
-  behavior of "A simple actor"
-
-  it should "receive our message in Scala" in {
+  test("Case 1: Sending a simple message to an actor") {
     val system = ActorSystem("MySystem")
     val myActor = system.actorOf(Props[SimpleActorScala], name = "simpleActorScala")
     myActor ! "Simple Test"
@@ -15,7 +14,7 @@ class SimpleActorSpec extends FlatSpec {
     Thread.sleep(3000)
   }
 
-  it should "receive our message in Scala using a factory" in {
+  test("Case 2: Creating an actor using a factory"){
     val system = ActorSystem("MySystem")
     val myActor = system.actorOf(Props(new SimpleActorScala), name = "simpleActorScala")
     myActor ! "Simple Test"
@@ -23,7 +22,7 @@ class SimpleActorSpec extends FlatSpec {
     Thread.sleep(3000)
   }
 
-  it should "be at location akka://MySystem/user/simpleActorJava" in {
+  test("Case 3: Using an actor selection to locate an actor"){
     val system = ActorSystem("MySystem")
     system.actorOf(Props[SimpleActorScala], name = "simpleActorJava")
     val actorSelection = system.actorSelection("akka://MySystem/user/simpleActorJava")
@@ -32,7 +31,7 @@ class SimpleActorSpec extends FlatSpec {
     Thread.sleep(3000)
   }
 
-  it should "throw send a dead letter if the actor is not found" in {
+  test("Case 4: If a message does not find its way, it end up in the dead letter actor") {
     val system = ActorSystem("MySystem")
     system.actorOf(Props[SimpleActorScala], name = "simpleActorJava")
     val actorSelection = system.actorSelection("akka://MySystem/user/somethingElseIShouldn\'tBeLookingFor")

@@ -23,7 +23,7 @@ class GraphProblemsSpec extends FunSuite with Matchers {
     * 5. Ignore takes one from the split
     * 6. The other is fed back into the merge
     */
-  test("Deadlock issues, The following shows a deadlock. ") {
+  test("Case 1: Deadlock issues, The following shows a deadlock. ") {
     val graph = RunnableGraph.fromGraph(GraphDSL.create() { implicit b =>
       import akka.stream.scaladsl.GraphDSL.Implicits._
 
@@ -40,7 +40,7 @@ class GraphProblemsSpec extends FunSuite with Matchers {
     Thread.sleep(10000)
   }
 
-  test("Deadlock issues avoided with merge preferred. ") {
+  test("Case 2: Deadlock issues avoided with merge preferred. ") {
     val graph = RunnableGraph.fromGraph(GraphDSL.create() { implicit b =>
       import akka.stream.scaladsl.GraphDSL.Implicits._
 

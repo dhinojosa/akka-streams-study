@@ -1,20 +1,20 @@
 package com.xyzcorp.akka.streams
 
-import akka.{Done, NotUsed}
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Keep, RunnableGraph, Sink, Source}
 import akka.stream._
+import akka.stream.scaladsl.{Keep, RunnableGraph, Sink, Source}
+import akka.{Done, NotUsed}
 import org.scalatest.{FunSuite, Matchers}
 
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 import scala.util.{Failure, Success}
 
 class KillSwitchSpec extends FunSuite with Matchers {
   implicit val system: ActorSystem = ActorSystem("MyActorSystem")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
-  implicit val executionContext: ExecutionContextExecutor = system.dispatcher
+  implicit val executionContext: ExecutionContext = system.dispatcher
 
   private val exception: RuntimeException = new RuntimeException("Something bad happened!")
 
@@ -23,11 +23,13 @@ class KillSwitchSpec extends FunSuite with Matchers {
     val source = Source(Stream.from(1)).delay(1 second)
     val sink = Sink.foreach(println)
 
-    val sourceWithSwitch: Source[Int, UniqueKillSwitch] = source.viaMat(KillSwitches.single)(Keep.right)
+    val sourceWithSwitch =
+      source.viaMat(KillSwitches.single)(Keep.right)
 
-    val completeRunnable: RunnableGraph[(UniqueKillSwitch, Future[Done])] = sourceWithSwitch.toMat(sink)(Keep.both)
+    val completeRunnable=
+      sourceWithSwitch.toMat(sink)(Keep.both)
 
-    val completion: (UniqueKillSwitch, Future[Done]) = completeRunnable.run()
+    val completion = completeRunnable.run()
 
     val uniqueKillSwitch = completion._1
 
@@ -53,11 +55,11 @@ class KillSwitchSpec extends FunSuite with Matchers {
     val source = Source(Stream.from(1)).delay(1 second)
     val sink = Sink.foreach(println)
 
-    val sourceWithSwitch: Source[Int, UniqueKillSwitch] = source.viaMat(KillSwitches.single)(Keep.right)
+    val sourceWithSwitch = source.viaMat(KillSwitches.single)(Keep.right)
 
-    val completeRunnable: RunnableGraph[(UniqueKillSwitch, Future[Done])] = sourceWithSwitch.toMat(sink)(Keep.both)
+    val completeRunnable = sourceWithSwitch.toMat(sink)(Keep.both)
 
-    val completion: (UniqueKillSwitch, Future[Done]) = completeRunnable.run()
+    val completion = completeRunnable.run()
 
     val uniqueKillSwitch = completion._1
 
