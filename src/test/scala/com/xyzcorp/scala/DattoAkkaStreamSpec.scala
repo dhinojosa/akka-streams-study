@@ -1,16 +1,21 @@
 package com.xyzcorp.scala
 
 
+import java.util.concurrent.Executors
+
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import org.scalatest.{FunSuite, Matchers}
 
+import scala.concurrent.ExecutionContext
+
 class DattoAkkaStreamSpec extends FunSuite with Matchers {
 
   implicit val system = ActorSystem("My-Actor-System")
   implicit val materializer = ActorMaterializer() //pump
-  //import scala.concurrent.ExecutionContext.Implicits.global
+  //1. import scala.concurrent.ExecutionContext.Implicits.global
+  //2. implicit val executionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(10))
   implicit val executionContext = system.dispatcher
 
   test("Sample Stream") {
