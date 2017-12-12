@@ -2,7 +2,7 @@ package com.xyzcorp.akka.streams
 
 import akka.actor.ActorSystem
 import akka.stream._
-import akka.stream.scaladsl.{Keep, RunnableGraph, Sink, Source}
+import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Sink, Source}
 import akka.{Done, NotUsed}
 import org.scalatest.{FunSuite, Matchers}
 

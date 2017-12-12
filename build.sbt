@@ -2,7 +2,7 @@ name := "akka-streams-study"
 
 version := "1.0-SNAPSHOT"
 
-scalaVersion := "2.12.3"
+scalaVersion := "2.12.4"
 
 val akkaVersion = "2.5.8"
 
@@ -16,12 +16,3 @@ libraryDependencies ++= Seq(
   , "org.assertj" % "assertj-core" % "3.5.2" % "test"
   , "com.novocode" % "junit-interface" % "0.11" % "test"
 )
-
-crossPaths := false
-
-EclipseKeys.withSource := true
-
-EclipseKeys.withJavadoc := true
-
-EclipseKeys.executionEnvironment := Some(EclipseExecutionEnvironment.JavaSE18)
-

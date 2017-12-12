@@ -96,7 +96,7 @@ class GraphStreamSpec extends FunSuite with Matchers {
       val flow_3 = Flow[Int].map(x => "Flow 3: " + x * 3)
 
       source ~> broadcast ~> flow_2 ~> merge ~> sink
-      broadcast ~> flow_3 ~> merge
+                broadcast ~> flow_3 ~> merge
       ClosedShape
     })
 
