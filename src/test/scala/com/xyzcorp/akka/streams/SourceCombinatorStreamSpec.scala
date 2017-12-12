@@ -57,6 +57,7 @@ class SourceCombinatorStreamSpec extends FunSuite with Matchers {
     Source(Stream.from(0)).runForeach { i => Thread.sleep(5); println(i) }
   }
 
+
   test(
     """Case 8: Throttle sends elements downstream with speed limited to elements/per
          In other words, this stage set the maximum rate for emitting messages.
