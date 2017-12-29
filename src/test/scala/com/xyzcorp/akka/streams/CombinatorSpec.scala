@@ -2,15 +2,16 @@ package com.xyzcorp.akka.streams
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Interleave, Keep, Merge, MergePrioritized, Source}
-import akka.stream.{ActorMaterializer, DelayOverflowStrategy, ThrottleMode}
+import akka.event.Logging
+import akka.stream.scaladsl.{Interleave, Keep, Merge, MergePrioritized, RunnableGraph, Sink, Source}
+import akka.stream.{ActorMaterializer, Attributes, DelayOverflowStrategy, ThrottleMode}
 import org.scalatest.{FunSuite, Matchers}
 
 import scala.collection.immutable.{Seq => ImmutableSeq}
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContextExecutor, Promise}
 import scala.language.postfixOps
 
-class SourceCombinatorStreamSpec extends FunSuite with Matchers {
+class CombinatorSpec extends FunSuite with Matchers {
   implicit val system: ActorSystem = ActorSystem("MyActorSystem")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
@@ -174,5 +175,21 @@ class SourceCombinatorStreamSpec extends FunSuite with Matchers {
         would like to carry through""") {
     val source: Source[(Int, Char), NotUsed] = Source(1 to 100)
       .zipMat(Source('a' to 'z'))(Keep.left)
+  }
+
+  test("""Case 20: Attributes and Logging, the log and the attributes are considered
+      | one unit when it comes to logging""") {
+    val maybeSource: Source[Int, Promise[Option[Int]]] = Source.maybe[Int]
+    val runnableGraph: RunnableGraph[Promise[Option[Int]]] = maybeSource
+      .log("Attributes and Logging (Start)")
+      .withAttributes(Attributes.logLevels(onElement = Logging.DebugLevel))
+      .map(x => x + 10)
+      .log("Attributes and Logging (After Adding Ten)")
+      .withAttributes(Attributes.logLevels(onElement = Logging.DebugLevel))
+      .toMat(Sink.foreach(println))(Keep.left)
+    val promisedMaybeInt = runnableGraph.run()
+    Thread.sleep(100)
+    promisedMaybeInt.success(Some(100))
+    Thread.sleep(100)
   }
 }
