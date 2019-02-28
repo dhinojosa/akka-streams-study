@@ -26,7 +26,6 @@ class SimpleStreamSpec extends FunSuite with Matchers {
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
   implicit val loggingAdapter: LoggingAdapter = Logging(system, "SimpleStreamSpec")
 
-
   val userHome: String = System.getProperty("user.home")
 
   test("Case 1: A Source that accepts a single item, the first element [Int] " +
@@ -149,7 +148,7 @@ class SimpleStreamSpec extends FunSuite with Matchers {
     val maybeSource: Source[Int, Promise[Option[Int]]] = Source.maybe[Int]
     val result: RunnableGraph[Promise[Option[Int]]] =
          maybeSource.map(x => x + 1).toMat(Sink.foreach(println))(Keep.left)
-    val promise = result.run()
+    val promise: Promise[Option[Int]] = result.run()
     Thread.sleep(1000)
     promise.success(Some(100))
     Thread.sleep(1000)
@@ -159,7 +158,8 @@ class SimpleStreamSpec extends FunSuite with Matchers {
     import scala.concurrent.duration._
 
     val source: Source[Int, NotUsed] = Source(1 to 5) //Uses apply
-    val sink: Sink[Int, Future[Int]] = Sink.fold[Int, Int](0)((total, next) => total + next)
+    val sink: Sink[Int, Future[Int]] =
+      Sink.fold[Int, Int](0)((total, next) => total + next)
 
     //The same as below: val runnable = source.toMat(sink)((nu, mat2) => mat2)
     val runnable = source.toMat(sink)(Keep.right)
@@ -233,8 +233,8 @@ class SimpleStreamSpec extends FunSuite with Matchers {
 
     result.run().onComplete { t =>
       val str = t match {
-        case (Success(x)) => "Successful run: " + x
-        case (Failure(th)) => "Failure run: " + th
+        case Success(x) => "Successful run: " + x
+        case Failure(th) => "Failure run: " + th
       }
       println(str)
     }
@@ -263,12 +263,14 @@ class SimpleStreamSpec extends FunSuite with Matchers {
     Thread.sleep(5000)
   }
 
-  test("""Case 21: Perform a stream with a recoverWithRetries which will run the test a specified
+  test("""Case 21: Perform a stream with a recoverWithRetries
+      |  which will run the test a specified
       | number of times and will bail with another stream""") {
-    Source(10 to 0 by -1)
+    Source(5 to 0 by -1)
       .async
-      .map(x => Some(100 / x))
-      .recoverWithRetries(3, { case t: Throwable => Source(20 to 30).map(Some(_)) })
+      .map{x => Some(100 / x)}
+      .recoverWithRetries(3, {
+        case t: Throwable => Source(3 to 0 by -1).map(y => Some(100/y))})
       .runForeach(println)
     Thread.sleep(5000)
   }
@@ -315,23 +317,10 @@ class SimpleStreamSpec extends FunSuite with Matchers {
 
   test("Case 25: Simple logging with Attributes") {
     Source(1 to 100)
-      .log("1 to 100 with Warning Level")
-      .withAttributes(Attributes.logLevels(onElement = Logging.WarningLevel))
+      .log("1 to 100")
+      .withAttributes(Attributes.logLevels(onElement = Logging.DebugLevel))
       .runForeach(println)
   }
 
-  test("Case 26: Attributes and Logging, the log and the attributes are considered one unit when it comes to logging") {
-    val maybeSource: Source[Int, Promise[Option[Int]]] = Source.maybe[Int]
-    val runnableGraph: RunnableGraph[Promise[Option[Int]]] = maybeSource
-      .log("Attributes and Logging (Start)")
-      .withAttributes(Attributes.logLevels(onElement = Logging.WarningLevel))
-      .map(x => x + 10)
-      .log("Attributes and Logging (After Adding Ten)")
-      .withAttributes(Attributes.logLevels(onElement = Logging.WarningLevel))
-      .toMat(Sink.foreach(println))(Keep.left)
-    val promisedMaybeInt = runnableGraph.run()
-    Thread.sleep(100)
-    promisedMaybeInt.success(Some(100))
-    Thread.sleep(100)
-  }
+
 }

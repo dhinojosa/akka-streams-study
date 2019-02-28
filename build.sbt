@@ -2,9 +2,9 @@ name := "akka-streams-study"
 
 version := "1.0-SNAPSHOT"
 
-scalaVersion := "2.12.4"
+scalaVersion := "2.12.8"
 
-val akkaVersion = "2.5.8"
+val akkaVersion = "2.5.21"
 
 scalacOptions in Scope.Global := Seq("-deprecation", "-feature")
 

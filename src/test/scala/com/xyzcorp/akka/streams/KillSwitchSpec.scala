@@ -20,13 +20,15 @@ class KillSwitchSpec extends FunSuite with Matchers {
 
   test("Case 1: A Unique Kill Switch can control the flow of a stream and is unique to a single stream, in this case" +
     "we will gracefully shut it down") {
-    val source = Source(Stream.from(1)).delay(1 second)
+    val source: Source[Int, NotUsed] =
+      Source(Stream.from(1)).delay(1 second)
+
     val sink = Sink.foreach(println)
 
-    val sourceWithSwitch =
+    val sourceWithSwitch: Source[Int, UniqueKillSwitch] =
       source.viaMat(KillSwitches.single)(Keep.right)
 
-    val completeRunnable=
+    val completeRunnable: RunnableGraph[(UniqueKillSwitch, Future[Done])] =
       sourceWithSwitch.toMat(sink)(Keep.both)
 
     val completion = completeRunnable.run()

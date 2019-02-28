@@ -2,54 +2,90 @@ package com.xyzcorp.akka.streams
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.event.Logging
-import akka.stream.scaladsl.{Interleave, Keep, Merge, MergePrioritized, RunnableGraph, Sink, Source}
-import akka.stream.{ActorMaterializer, Attributes, DelayOverflowStrategy, ThrottleMode}
+import akka.stream.scaladsl.{Flow, Interleave, Keep, Merge, MergePrioritized, Sink, Source}
+import akka.stream.{ActorMaterializer, DelayOverflowStrategy, KillSwitches, ThrottleMode}
 import org.scalatest.{FunSuite, Matchers}
 
 import scala.collection.immutable.{Seq => ImmutableSeq}
-import scala.concurrent.{ExecutionContextExecutor, Promise}
+import scala.concurrent.{Await, ExecutionContextExecutor}
 import scala.language.postfixOps
 
-class CombinatorSpec extends FunSuite with Matchers {
+class FlowCombinatorStreamSpec extends FunSuite with Matchers {
   implicit val system: ActorSystem = ActorSystem("MyActorSystem")
   implicit val materializer: ActorMaterializer = ActorMaterializer()
   implicit val executionContext: ExecutionContextExecutor = system.dispatcher
 
   import scala.concurrent.duration._
 
-  test("Case 1: Map pplies a function to element in the stream") {
-    Source(1 to 10).map(x => x + 64)
-      .map(x => x.toChar + " ")
-      .runForeach(println)
+  test("Case 1: map applies a function to element in the stream") {
+    val flow = Flow[Int].map(x => x * 100)
+    Source(1 to 100).via(flow).runForeach(println)
   }
 
   test("Case 2: filter will only pass on those elements that satisfy the given predicate") {
-    Source(1 to 10).filter(_ % 2 != 0).runForeach(println)
+    val flow = Flow[Int].filter(_ % 2 != 0)
+    Source(1 to 10).via(flow).runForeach(println)
   }
 
   test("Case 3: filterNot will negate what filter does") {
+    val flow = Flow[Int].filterNot(_ % 2 != 0)
     Source(1 to 10).filterNot(_ % 2 != 0).runForeach(println)
   }
 
-  test("Case 4: Delay will delay the stream by the duration presented") {
-    Source(1 to 10).delay(10 seconds).runForeach(println)
-    Thread.sleep(12000)
+  test("Case 4: Delay will cause an initial delay the stream by the duration presented") {
+    val flow = Flow[Int].delay(10 seconds)
+    val graph = Source(1 to 10).via(flow).toMat(Sink.foreach(println))(Keep.right)
+    val future = graph.run()
+    Await.result(future, 15 seconds)
   }
 
-  test("""Case 5: Delay will delay the stream by the duration presented, as well as receive
+  test(
+    """Case 5: Delay will cause an initial delay the stream by the duration presented,
+       as well as receive
        an DelayOverflowStrategy, which contains, backpressure, dropBuffer, dropHead,
        dropNew, dropTail, emitEarly, and fail""") {
-    Source(1 to 10).delay(10 seconds, DelayOverflowStrategy.dropBuffer).runForeach(println)
+
+    val flow = Flow[Int].delay(5 seconds, DelayOverflowStrategy.dropBuffer)
+    val graph = Source(Stream.from(0))
+      .via(flow)
+      .viaMat(KillSwitches.single)(Keep.right)
+      .toMat(Sink.foreach(println))(Keep.both)
+
+    val tuple = graph.run()
+    val killSwitch = tuple._1
+    val future = tuple._2
+
     Thread.sleep(12000)
+
+    killSwitch.shutdown()
+
+    Await.result(future, 5 seconds)
   }
 
-  test("""Case 6: flatMapConcat transforms each element into a `Source` of output elements
+  test(
+    """Case 6: flatMapConcat transforms each element into a `Source` of output elements
       then flattened into the output stream by concatenation,
       fully consuming one Source after the other.""") {
+
+    val flow = Flow[String]
+      .flatMapConcat(w =>
+        Source[String](w.split("""\s""").to[ImmutableSeq]))
     Source.single("This is a sentence")
-      .flatMapConcat(w => Source.apply[String](w.split("""\s""").to[ImmutableSeq]))
+      .via(flow)
       .runForeach(println)
+  }
+
+  test(
+    """Case 7: flatMapMerge transforms each element into a `Source` of output elements
+      then flattened into the output stream by concatenation,
+      fully consuming one Source after the other.""") {
+
+    val flow = Flow[String]
+      .flatMapMerge(4, w =>
+        Source[String](w.split("""\s""").to[ImmutableSeq]))
+
+    Source.single("Raise a glass to streaming architectures!").via(flow).runForeach(println)
+    Thread.sleep(30000)
   }
 
 
@@ -58,6 +94,7 @@ class CombinatorSpec extends FunSuite with Matchers {
          In other words, this stage set the maximum rate for emitting messages.
          ThrottleMode.Shaping make pauses before emitting messages
          to meet throttle rate""") {
+
     Source(Stream.from(0))
       .throttle(1, 1 second, 10, ThrottleMode.shaping)
       .runForeach(println)
@@ -103,6 +140,7 @@ class CombinatorSpec extends FunSuite with Matchers {
       .map[Either[Throwable, Int]](x => Right(x))
       .recover(new PartialFunction[Throwable, Either[Throwable, Int]] {
         override def isDefinedAt(x: Throwable): Boolean = true
+
         override def apply(v1: Throwable): Left[Throwable, Int] = Left[Throwable, Int](v1)
       })
       .runForeach(println)
@@ -146,18 +184,20 @@ class CombinatorSpec extends FunSuite with Matchers {
     Source(1 to 100).zip(Source('a' to 'z')).runForeach(println)
   }
 
-  test("""Case 17: zip will create a stream of tuples from each of the sources
+  test(
+    """Case 17: zip will create a stream of tuples from each of the sources
        and will wait until another element is available. Some notes:
            1. 100 is vastly larger than a through z
            2. Throttle will slow things down but not by much""") {
-    Source(1 to 100)                                          //100 is vastly larger than a..z
+    Source(1 to 100) //100 is vastly larger than a..z
       .zip(Source('a' to 'z')
-        .throttle(1, 1 second, 3, ThrottleMode.shaping)) //Causing a wait
+      .throttle(1, 1 second, 3, ThrottleMode.shaping)) //Causing a wait
       .runForeach(println)
     Thread.sleep(10000)
   }
 
-  test("""Case 18: zipWith will create whatever with whatever function
+  test(
+    """Case 18: zipWith will create whatever with whatever function
        you would like from each of the sources, and will wait until
        another element is available""") {
     Source(1 to 100)
@@ -165,25 +205,10 @@ class CombinatorSpec extends FunSuite with Matchers {
       .runForeach(println)
   }
 
-  test("""Case 19: zipMat will allow you to choose which of the auxiliary information you
+  test(
+    """Case 19: zipMat will allow you to choose which of the auxiliary information you
         would like to carry through""") {
     val source: Source[(Int, Char), NotUsed] = Source(1 to 100)
       .zipMat(Source('a' to 'z'))(Keep.left)
-  }
-
-  test("""Case 20: Attributes and Logging, the log and the attributes are considered
-      | one unit when it comes to logging""") {
-    val maybeSource: Source[Int, Promise[Option[Int]]] = Source.maybe[Int]
-    val runnableGraph: RunnableGraph[Promise[Option[Int]]] = maybeSource
-      .log("Attributes and Logging (Start)")
-      .withAttributes(Attributes.logLevels(onElement = Logging.DebugLevel))
-      .map(x => x + 10)
-      .log("Attributes and Logging (After Adding Ten)")
-      .withAttributes(Attributes.logLevels(onElement = Logging.DebugLevel))
-      .toMat(Sink.foreach(println))(Keep.left)
-    val promisedMaybeInt = runnableGraph.run()
-    Thread.sleep(100)
-    promisedMaybeInt.success(Some(100))
-    Thread.sleep(100)
   }
 }

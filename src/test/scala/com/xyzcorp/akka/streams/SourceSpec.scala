@@ -60,7 +60,7 @@ class SourceSpec extends FunSuite with Matchers {
     val result = Source.unfold(0 → 1) {
       case (x, _) if x > 5 ⇒ None
       case (x, y) ⇒ Some((y → (x + y)) → x)
-    }.toMat(Sink.collection[Int, List[Int]])(Keep.right)
+    }.toMat(Sink.seq)(Keep.right)
 
     val future = result.run()
     Await.ready(future, 3 seconds)
@@ -72,8 +72,7 @@ class SourceSpec extends FunSuite with Matchers {
                from the beginning, and continue from there. Since Stream
                is already an iterable it can just be used
                with Source.apply""") {
-    val future = Source(Stream.from(0)).take(4).toMat(Sink.collection[Int,
-      List[Int]])(Keep.right).run()
+    val future = Source(Stream.from(0)).take(4).toMat(Sink.seq)(Keep.right).run()
     Await.ready(future, 3 seconds).onComplete {
       case Success(lst) => lst should be(List(0, 1, 2, 3))
       case Failure(t) => fail(t.getMessage)
@@ -87,7 +86,7 @@ class SourceSpec extends FunSuite with Matchers {
     val value = Source
       .actorRef(2000, OverflowStrategy.dropNew)
       .viaMat(KillSwitches.single)(Keep.both)
-      .toMat(Sink.collection[String, List[String]])(Keep.both)
+      .toMat(Sink.seq)(Keep.both)
 
     val tuple = value.run()
     val actorRef = tuple._1._1
